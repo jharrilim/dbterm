@@ -3,7 +3,7 @@ mod new_connection_form;
 
 use new_connection_form::ConnectionInfoForm;
 
-use crate::{events::EventHandler, popup::Popup};
+use crate::{data::ConnectionInfo, events::EventHandler, popup::Popup};
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -14,15 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use self::connection_list::ConnectionList;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ConnectionInfo {
-    name: String,
-    host: String,
-    port: u16,
-    user: String,
-    password: String,
-    database: String,
-}
+
 
 #[derive(Debug, Default, PartialEq)]
 enum State {
@@ -35,15 +27,18 @@ enum State {
 pub(crate) struct ConnectionScreen {
     connections: Vec<ConnectionInfo>,
     state: State,
+    connections_list: ConnectionList,
     new_connection_form: ConnectionInfoForm,
 }
 
 impl ConnectionScreen {
     pub fn new() -> Self {
+        let connections = ConnectionScreen::load_saved_connections();
         Self {
-            connections: ConnectionScreen::load_saved_connections(),
+            connections,
             state: State::Home,
             new_connection_form: ConnectionInfoForm::new(),
+            connections_list: ConnectionList::new(connections),
         }
     }
 
@@ -96,7 +91,7 @@ impl EventHandler for ConnectionScreen {
                         return Ok(false);
                     }
                 }
-                _ => {}
+                _ => return self.connections_list.handle_event(event),
             },
             State::NewConnection => {
                 if event == Event::Key(KeyCode::Esc.into()) {
@@ -129,7 +124,7 @@ impl Widget for &ConnectionScreen {
 
         self.render_instructions(layout[1], buf);
 
-        let connection_list = ConnectionList::new(&self.connections);
+        let connection_list = ConnectionList::new(self.connections);
         connection_list.render(layout[0], buf);
 
         match self.state {

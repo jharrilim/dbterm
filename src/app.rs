@@ -2,14 +2,15 @@ use clokwerk::{AsyncScheduler, TimeUnits};
 use color_eyre::{eyre::Context, Result};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::prelude::*;
-use tokio::{sync::Mutex, task::JoinHandle};
-use tokio::sync::mpsc::{UnboundedSender};
 use std::{
     io::{self, Stdout},
-    sync::{ Arc},
+    sync::Arc,
     time::Duration,
 };
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::{sync::Mutex, task::JoinHandle};
 
+use crate::data::Data;
 use crate::screens::connection::ConnectionScreen;
 use crate::{events::EventHandler, term, IoEvent};
 
@@ -24,7 +25,6 @@ enum MainScreenTabs {
 }
 
 pub struct Runtime {
-    state: State,
     tx: Arc<Mutex<UnboundedSender<IoEvent>>>,
     scheduler_handle: Option<JoinHandle<()>>,
     terminal: Terminal<CrosstermBackend<Stdout>>,
@@ -35,7 +35,6 @@ impl Runtime {
     pub fn new(tx: UnboundedSender<IoEvent>, terminal: Terminal<CrosstermBackend<Stdout>>) -> Self {
         let tx = Arc::new(Mutex::new(tx));
         Self {
-            state: State::ConnectionScreen,
             tx,
             scheduler_handle: None,
             terminal,
@@ -65,12 +64,10 @@ impl Runtime {
             }
         });
 
-        self.scheduler_handle = Some(
-            tokio::spawn(async move {
-                scheduler.run_pending().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            })
-        );
+        self.scheduler_handle = Some(tokio::spawn(async move {
+            scheduler.run_pending().await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }));
     }
 
     pub fn stop_scheduler(&mut self) {
@@ -114,6 +111,7 @@ impl Runtime {
 struct App {
     state: State,
     connection_screen: ConnectionScreen,
+    data: Data,
 }
 
 impl App {
@@ -121,6 +119,7 @@ impl App {
         Self {
             state: State::ConnectionScreen,
             connection_screen: ConnectionScreen::new(),
+            data: Data::new(),
         }
     }
 }
@@ -128,15 +127,29 @@ impl App {
 impl EventHandler for App {
     fn handle_event(&mut self, event: Event) -> Result<bool> {
         if let Event::Key(key_event) = event {
-            if let KeyEvent { code: KeyCode::Char('c'), modifiers: KeyModifiers::CONTROL, .. } = key_event{
+            if let KeyEvent {
+                code: KeyCode::Char('c'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            } = key_event
+            {
                 return Ok(true);
             }
         }
         match &mut self.state {
             State::ConnectionScreen => {
-                return self
-                    .connection_screen
-                    .handle_event(event);
+                if let Event::Key(key_event) = event {
+                    if let KeyEvent {
+                        code: KeyCode::Char('c'),
+                        ..
+                    } = key_event
+                    {
+                        self.state = State::MainScreen(MainScreenTabs::Querying);
+                        return Ok(false);
+                    }
+                }
+
+                return self.connection_screen.handle_event(event);
             }
             State::MainScreen(_) => {}
         }

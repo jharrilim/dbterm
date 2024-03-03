@@ -3,7 +3,7 @@ use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
+    style::{Modifier, Style, Stylize},
     widgets::{Block, Borders, Widget},
 };
 use tui_textarea::TextArea;
@@ -46,19 +46,25 @@ impl ConnectionInfoForm {
 
         let mut host = TextArea::default();
         host.set_block(Block::default().title("Host").borders(Borders::ALL));
+        host.set_cursor_style(Style::default());
 
         let mut port = TextArea::default();
         port.set_block(Block::default().title("Port").borders(Borders::ALL));
+        port.set_placeholder_text("5432");
+        port.set_cursor_style(Style::default());
 
         let mut user = TextArea::default();
         user.set_block(Block::default().title("User").borders(Borders::ALL));
+        user.set_cursor_style(Style::default());
 
         let mut password = TextArea::default();
         password.set_mask_char('\u{2022}'); //U+2022 BULLET (•)
         password.set_block(Block::default().title("Password").borders(Borders::ALL));
+        password.set_cursor_style(Style::default());
 
         let mut database = TextArea::default();
         database.set_block(Block::default().title("Database").borders(Borders::ALL));
+        database.set_cursor_style(Style::default());
 
         Self {
             name,
@@ -104,9 +110,11 @@ impl ConnectionInfoForm {
                     .borders(Borders::ALL)
                     .magenta();
                 input.set_style(Style::default());
+                input.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
                 input.set_block(block);
             } else {
                 input.set_style(Style::default());
+                input.set_cursor_style(Style::default());
                 input.set_block(input.block().unwrap().clone().borders(Borders::ALL).gray());
             }
         }
