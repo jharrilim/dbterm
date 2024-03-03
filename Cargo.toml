@@ -1,0 +1,21 @@
+[package]
+name = "dbterm"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cli-clipboard = "0.4.0"
+clokwerk = "0.4.0"
+color-eyre = "0.6"
+crossterm = "0.27.0"
+dirs = "5.0.1"
+keyring = "2"
+ratatui = { version = "0.26.1", features = ["default", "serde"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.114"
+sqlx = { version = "0.7", features = [ "runtime-tokio", "tls-rustls", "postgres", "mysql", "sqlite" ] }
+tokio = { version = "1.36.0", features = ["full"] }
+tokio-macros = { version = "2.2.0" }
+tui-textarea = "0.4.0"
