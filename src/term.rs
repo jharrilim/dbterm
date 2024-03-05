@@ -1,4 +1,7 @@
-use std::{io::{self, Stdout, Write}, time::Duration};
+use std::{
+    io::{self, Stdout, Write},
+    time::Duration,
+};
 
 use color_eyre::{eyre::WrapErr, Result};
 use crossterm::{

@@ -90,7 +90,6 @@ impl Runtime {
         let (app_store_tx, app_store_rx) = tokio::sync::mpsc::unbounded_channel();
         let (render_tx, render_rx) = tokio::sync::mpsc::unbounded_channel::<RenderEvent>();
 
-
         let app = Arc::new(Mutex::new(app));
         crate::render::render_loop(terminal, app.clone(), store.data(), render_rx);
 
@@ -107,6 +106,12 @@ impl Runtime {
 pub struct App {
     state: State,
     connection_screen: ConnectionScreen,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl App {
@@ -149,7 +154,7 @@ impl AppWidget for App {
     fn render(&self, area: Rect, buf: &mut Buffer, ctx: &Ctx) {
         match &self.state {
             State::ConnectionScreen => (&self.connection_screen).render(area, buf, ctx),
-            State::MainScreen(tab) => {}
+            State::MainScreen(_tab) => {}
         };
     }
 }

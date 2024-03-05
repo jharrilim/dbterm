@@ -69,7 +69,7 @@ impl EventHandler for ConnectionList {
         &mut self,
         event: Event,
         ctx: &Ctx,
-        tx: &UnboundedSender<AppCommand>,
+        _tx: &UnboundedSender<AppCommand>,
     ) -> Result<bool> {
         match event {
             Event::Key(key_event) => match key_event.code {

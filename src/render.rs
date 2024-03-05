@@ -5,7 +5,10 @@ use std::{
 
 use color_eyre::eyre::Context;
 use ratatui::{backend::CrosstermBackend, Terminal};
-use tokio::{sync::{mpsc::UnboundedReceiver, Mutex}, task::JoinHandle};
+use tokio::{
+    sync::{mpsc::UnboundedReceiver, Mutex},
+    task::JoinHandle,
+};
 
 use crate::{app::App, data::Data, widget::AppWidget};
 

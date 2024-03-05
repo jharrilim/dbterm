@@ -4,14 +4,19 @@ mod new_connection_form;
 use new_connection_form::ConnectionInfoForm;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{data::{AppCommand, ConnectionInfo, Ctx, Data}, events::EventHandler, popup::Popup, widget::AppWidget};
+use self::connection_list::ConnectionList;
+use crate::{
+    data::{AppCommand, ConnectionInfo, Ctx},
+    events::EventHandler,
+    popup::Popup,
+    widget::AppWidget,
+};
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph, Wrap},
 };
-use self::connection_list::ConnectionList;
 
 #[derive(Debug, Default, PartialEq)]
 enum State {
@@ -38,7 +43,12 @@ impl ConnectionScreen {
 }
 
 impl EventHandler for ConnectionScreen {
-    fn handle_event(&mut self, event: Event, ctx: &Ctx, tx: &UnboundedSender<AppCommand>) -> Result<bool> {
+    fn handle_event(
+        &mut self,
+        event: Event,
+        ctx: &Ctx,
+        tx: &UnboundedSender<AppCommand>,
+    ) -> Result<bool> {
         match self.state {
             State::Home => match event {
                 Event::Key(key_event) => {
@@ -50,9 +60,9 @@ impl EventHandler for ConnectionScreen {
                         self.new_connection_form = ConnectionInfoForm::new();
                         return Ok(false);
                     }
-                    return self.connections_list.handle_event(event, ctx, tx);
+                    self.connections_list.handle_event(event, ctx, tx)
                 }
-                _ => return self.connections_list.handle_event(event, ctx, tx),
+                _ => self.connections_list.handle_event(event, ctx, tx),
             },
             State::NewConnection => {
                 if event == Event::Key(KeyCode::Esc.into()) {
@@ -61,15 +71,17 @@ impl EventHandler for ConnectionScreen {
                 }
                 if let Event::Key(key_event) = event {
                     if key_event.code == KeyCode::Enter && key_event.kind == KeyEventKind::Press {
-                        tx.send(AppCommand::SaveConnection(self.new_connection_form.to_connection_info())).ok();
+                        tx.send(AppCommand::SaveConnection(
+                            self.new_connection_form.to_connection_info(),
+                        ))
+                        .ok();
                         self.state = State::Home;
                         return Ok(false);
                     }
                 }
-                return self.new_connection_form.handle_event(event, ctx, tx);
+                self.new_connection_form.handle_event(event, ctx, tx)
             }
         }
-        Ok(false)
     }
 }
 
@@ -88,8 +100,7 @@ impl AppWidget for &ConnectionScreen {
         self.connections_list.render(layout[0], buf, ctx);
 
         match self.state {
-            State::Home => {
-            }
+            State::Home => {}
             State::NewConnection => {
                 let popup = Popup::new("New Connection");
                 let form = &self.new_connection_form;

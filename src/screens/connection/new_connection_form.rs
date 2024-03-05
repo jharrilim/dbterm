@@ -1,5 +1,5 @@
 use color_eyre::eyre::Result;
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEvent};
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -9,7 +9,10 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 use tui_textarea::TextArea;
 
-use crate::{data::{AppCommand, Ctx, Data}, events::EventHandler};
+use crate::{
+    data::{AppCommand, Ctx},
+    events::EventHandler,
+};
 
 use super::ConnectionInfo;
 
@@ -135,7 +138,12 @@ impl ConnectionInfoForm {
 }
 
 impl EventHandler for ConnectionInfoForm {
-    fn handle_event(&mut self, event: Event, ctx: &Ctx, tx: &UnboundedSender<AppCommand>) -> Result<bool> {
+    fn handle_event(
+        &mut self,
+        event: Event,
+        _ctx: &Ctx,
+        _tx: &UnboundedSender<AppCommand>,
+    ) -> Result<bool> {
         match event {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 match key_event.code {
