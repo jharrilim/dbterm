@@ -7,23 +7,22 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Widget},
 };
+use tokio::sync::mpsc::UnboundedSender;
 
+use crate::data::{AppCommand, Ctx};
 use crate::events::EventHandler;
+use crate::widget::AppWidget;
 
 use super::ConnectionInfo;
 
 #[derive(Debug)]
 pub struct ConnectionList {
-    connections: Vec<ConnectionInfo>,
     selected: usize,
 }
 
 impl ConnectionList {
-    pub fn new(connections: Vec<ConnectionInfo>) -> Self {
-        Self {
-            connections,
-            selected: 0,
-        }
+    pub fn new() -> Self {
+        Self { selected: 0 }
     }
 
     // renders a block for a single connection showcasing all of its info
@@ -39,7 +38,7 @@ impl ConnectionList {
             .borders(Borders::ALL);
 
         let block = if selected {
-            block.border_style(Style::default().fg(Color::Yellow))
+            block.border_style(Style::default().fg(Color::LightMagenta))
         } else {
             block
         };
@@ -66,17 +65,26 @@ impl ConnectionList {
 }
 
 impl EventHandler for ConnectionList {
-    fn handle_event(&mut self, event: Event) -> Result<bool> {
+    fn handle_event(
+        &mut self,
+        event: Event,
+        ctx: &Ctx,
+        tx: &UnboundedSender<AppCommand>,
+    ) -> Result<bool> {
         match event {
             Event::Key(key_event) => match key_event.code {
-                KeyCode::Up => {
+                KeyCode::Up | KeyCode::Char('k') => {
                     if self.selected > 0 {
                         self.selected -= 1;
+                    } else {
+                        self.selected = ctx.read().unwrap().connections.len() - 1;
                     }
                 }
-                KeyCode::Down => {
-                    if self.selected < self.connections.len() - 1 {
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if self.selected < ctx.read().unwrap().connections.len() - 1 {
                         self.selected += 1;
+                    } else {
+                        self.selected = 0;
                     }
                 }
                 _ => {}
@@ -87,8 +95,8 @@ impl EventHandler for ConnectionList {
     }
 }
 
-impl Widget for &ConnectionList {
-    fn render(self, area: Rect, buf: &mut Buffer)
+impl AppWidget for ConnectionList {
+    fn render(&self, area: Rect, buf: &mut Buffer, ctx: &Ctx)
     where
         Self: Sized,
     {
@@ -96,18 +104,19 @@ impl Widget for &ConnectionList {
         let block_area = block.inner(area);
         block.render(area, buf);
 
+        let conns = &ctx.read().unwrap().connections;
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .flex(Flex::Start)
             .constraints::<Vec<Constraint>>(
-                self.connections
+                conns
                     .iter()
                     .map(|_| Constraint::Length(3))
                     .collect::<Vec<_>>(),
             )
             .split(block_area);
 
-        for (i, connection) in self.connections.iter().enumerate() {
+        for (i, connection) in conns.iter().enumerate() {
             self.render_connection_block(connection, self.selected == i, layout[i], buf);
         }
     }

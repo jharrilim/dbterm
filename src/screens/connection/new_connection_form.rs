@@ -1,14 +1,15 @@
 use color_eyre::eyre::Result;
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style, Stylize},
     widgets::{Block, Borders, Widget},
 };
+use tokio::sync::mpsc::UnboundedSender;
 use tui_textarea::TextArea;
 
-use crate::events::EventHandler;
+use crate::{data::{AppCommand, Ctx, Data}, events::EventHandler};
 
 use super::ConnectionInfo;
 
@@ -41,7 +42,7 @@ impl ConnectionInfoForm {
             Block::default()
                 .title("Name")
                 .borders(Borders::ALL)
-                .magenta(),
+                .light_magenta(),
         );
 
         let mut host = TextArea::default();
@@ -77,6 +78,7 @@ impl ConnectionInfoForm {
         }
     }
 
+    #[allow(unused)]
     fn inputs(&self) -> [&TextArea<'static>; 6] {
         [
             &self.name,
@@ -108,7 +110,7 @@ impl ConnectionInfoForm {
                     .unwrap()
                     .clone()
                     .borders(Borders::ALL)
-                    .magenta();
+                    .light_magenta();
                 input.set_style(Style::default());
                 input.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
                 input.set_block(block);
@@ -133,7 +135,7 @@ impl ConnectionInfoForm {
 }
 
 impl EventHandler for ConnectionInfoForm {
-    fn handle_event(&mut self, event: Event) -> Result<bool> {
+    fn handle_event(&mut self, event: Event, ctx: &Ctx, tx: &UnboundedSender<AppCommand>) -> Result<bool> {
         match event {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 match key_event.code {

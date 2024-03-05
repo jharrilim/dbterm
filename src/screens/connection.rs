@@ -2,19 +2,16 @@ mod connection_list;
 mod new_connection_form;
 
 use new_connection_form::ConnectionInfoForm;
+use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{data::ConnectionInfo, events::EventHandler, popup::Popup};
+use crate::{data::{AppCommand, ConnectionInfo, Ctx, Data}, events::EventHandler, popup::Popup, widget::AppWidget};
 use color_eyre::eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph, Wrap},
 };
-use serde::{Deserialize, Serialize};
-
 use self::connection_list::ConnectionList;
-
-
 
 #[derive(Debug, Default, PartialEq)]
 enum State {
@@ -25,7 +22,6 @@ enum State {
 
 #[derive(Debug)]
 pub(crate) struct ConnectionScreen {
-    connections: Vec<ConnectionInfo>,
     state: State,
     connections_list: ConnectionList,
     new_connection_form: ConnectionInfoForm,
@@ -33,52 +29,16 @@ pub(crate) struct ConnectionScreen {
 
 impl ConnectionScreen {
     pub fn new() -> Self {
-        let connections = ConnectionScreen::load_saved_connections();
         Self {
-            connections,
             state: State::Home,
             new_connection_form: ConnectionInfoForm::new(),
-            connections_list: ConnectionList::new(connections),
+            connections_list: ConnectionList::new(),
         }
     }
-
-    fn connections_path() -> std::path::PathBuf {
-        dirs::data_dir()
-            .expect("No data dir")
-            .join("dbterm")
-            .join("connections.json")
-    }
-
-    fn load_saved_connections() -> Vec<ConnectionInfo> {
-        let connections_path = ConnectionScreen::connections_path();
-        if connections_path.exists() {
-            std::fs::read_to_string(&connections_path)
-                .ok()
-                .and_then(|content| serde_json::from_str(&content).ok())
-                .unwrap_or_default()
-        } else {
-          vec![]
-        }
-    }
-
-    fn save_connection(&mut self) -> Result<()> {
-        let connection = self.new_connection_form.to_connection_info();
-
-        let connections_path = ConnectionScreen::connections_path();
-        if !connections_path.exists() {
-            std::fs::create_dir_all(connections_path.parent().unwrap())?;
-        }
-        self.connections.push(connection);
-        let content = serde_json::to_string(&self.connections)?;
-        std::fs::write(&connections_path, content)?;
-        Ok(())
-    }
-
-    
 }
 
 impl EventHandler for ConnectionScreen {
-    fn handle_event(&mut self, event: Event) -> Result<bool> {
+    fn handle_event(&mut self, event: Event, ctx: &Ctx, tx: &UnboundedSender<AppCommand>) -> Result<bool> {
         match self.state {
             State::Home => match event {
                 Event::Key(key_event) => {
@@ -90,8 +50,9 @@ impl EventHandler for ConnectionScreen {
                         self.new_connection_form = ConnectionInfoForm::new();
                         return Ok(false);
                     }
+                    return self.connections_list.handle_event(event, ctx, tx);
                 }
-                _ => return self.connections_list.handle_event(event),
+                _ => return self.connections_list.handle_event(event, ctx, tx),
             },
             State::NewConnection => {
                 if event == Event::Key(KeyCode::Esc.into()) {
@@ -100,20 +61,20 @@ impl EventHandler for ConnectionScreen {
                 }
                 if let Event::Key(key_event) = event {
                     if key_event.code == KeyCode::Enter && key_event.kind == KeyEventKind::Press {
-                        self.save_connection()?;
+                        tx.send(AppCommand::SaveConnection(self.new_connection_form.to_connection_info())).ok();
                         self.state = State::Home;
                         return Ok(false);
                     }
                 }
-                return self.new_connection_form.handle_event(event);
+                return self.new_connection_form.handle_event(event, ctx, tx);
             }
         }
         Ok(false)
     }
 }
 
-impl Widget for &ConnectionScreen {
-    fn render(self, area: Rect, buf: &mut Buffer)
+impl AppWidget for &ConnectionScreen {
+    fn render(&self, area: Rect, buf: &mut Buffer, ctx: &Ctx)
     where
         Self: Sized,
     {
@@ -124,8 +85,7 @@ impl Widget for &ConnectionScreen {
 
         self.render_instructions(layout[1], buf);
 
-        let connection_list = ConnectionList::new(self.connections);
-        connection_list.render(layout[0], buf);
+        self.connections_list.render(layout[0], buf, ctx);
 
         match self.state {
             State::Home => {

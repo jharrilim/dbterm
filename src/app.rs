@@ -1,18 +1,20 @@
-use clokwerk::{AsyncScheduler, TimeUnits};
 use color_eyre::{eyre::Context, Result};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::prelude::*;
 use std::{
     io::{self, Stdout},
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::Duration,
 };
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::{sync::Mutex, task::JoinHandle};
+use tokio::sync::Mutex;
+use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 
-use crate::data::Data;
-use crate::screens::connection::ConnectionScreen;
-use crate::{events::EventHandler, term, IoEvent};
+use crate::{
+    data::{AppCommand, Ctx, Data, Store},
+    widget::AppWidget,
+};
+use crate::{events::EventHandler, term};
+use crate::{render::RenderEvent, screens::connection::ConnectionScreen};
 
 enum State {
     ConnectionScreen,
@@ -25,20 +27,17 @@ enum MainScreenTabs {
 }
 
 pub struct Runtime {
-    tx: Arc<Mutex<UnboundedSender<IoEvent>>>,
-    scheduler_handle: Option<JoinHandle<()>>,
     terminal: Terminal<CrosstermBackend<Stdout>>,
     app: App,
+    store: Store,
 }
 
 impl Runtime {
-    pub fn new(tx: UnboundedSender<IoEvent>, terminal: Terminal<CrosstermBackend<Stdout>>) -> Self {
-        let tx = Arc::new(Mutex::new(tx));
+    pub fn new(terminal: Terminal<CrosstermBackend<Stdout>>) -> Self {
         Self {
-            tx,
-            scheduler_handle: None,
             terminal,
             app: App::new(),
+            store: Store::new(),
         }
     }
 
@@ -47,71 +46,67 @@ impl Runtime {
         let app = &self.app;
 
         self.terminal
-            .draw(|frame| frame.render_widget(app, frame.size()))
+            .draw(|frame| app.render(frame.size(), frame.buffer_mut(), self.store.data()))
             .wrap_err("terminal.draw")?;
         Ok(())
     }
 
-    pub fn startup(&mut self) {}
-
-    pub fn run_scheduler(&mut self) {
-        let tx = self.tx.clone();
-        let mut scheduler = AsyncScheduler::new();
-        scheduler.every(60.seconds()).run(move || {
-            let tx = tx.clone();
-            async move {
-                let _ = tx.lock().await.send(IoEvent::Test);
+    pub fn event_loop(
+        app: Arc<Mutex<App>>,
+        data: &Arc<RwLock<Data>>,
+        app_tx: &UnboundedSender<AppCommand>,
+    ) -> JoinHandle<()> {
+        let app = app.clone();
+        let tx = app_tx.clone();
+        let data = data.clone();
+        tokio::spawn(async move {
+            loop {
+                let timeout = Duration::from_secs_f64(1.0 / 50.0);
+                if let Ok(Some(e)) = term::next_event(timeout) {
+                    if app
+                        .clone()
+                        .lock()
+                        .await
+                        .handle_event(e, &data, &tx)
+                        .is_ok_and(|x| x)
+                    {
+                        tx.send(AppCommand::Quit).ok();
+                        break;
+                    }
+                    tx.send(AppCommand::Render).ok();
+                }
             }
-        });
-
-        self.scheduler_handle = Some(tokio::spawn(async move {
-            scheduler.run_pending().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }));
+        })
     }
 
-    pub fn stop_scheduler(&mut self) {
-        self.scheduler_handle = None;
-    }
+    pub async fn run(self) -> Result<()> {
+        let Self {
+            app,
+            store,
+            terminal,
+            ..
+        } = self;
 
-    pub fn handle_event(&mut self) -> Result<bool> {
-        let timeout = Duration::from_secs_f64(1.0 / 50.0);
-        if let Some(e) = term::next_event(timeout)? {
-            return self.app.handle_event(e);
-        }
-        Ok(false)
-    }
+        let (app_store_tx, app_store_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (render_tx, render_rx) = tokio::sync::mpsc::unbounded_channel::<RenderEvent>();
 
-    pub async fn run(&mut self) -> Result<()> {
-        self.startup();
-        // self.run_scheduler();
-        let res = self.event_loop();
-        self.stop_scheduler();
+
+        let app = Arc::new(Mutex::new(app));
+        crate::render::render_loop(terminal, app.clone(), store.data(), render_rx);
+
+        Self::event_loop(app, store.data(), &app_store_tx);
+
+        store.run(app_store_rx, render_tx).await;
+
         let mut stdout = io::stdout();
         term::restore(&mut stdout)?;
-
-        self.terminal.show_cursor()?;
-        if let Err(err) = res {
-            println!("{:?}", err)
-        }
         Ok(())
-    }
-
-    fn event_loop(&mut self) -> Result<()> {
-        loop {
-            self.draw()?;
-
-            if self.handle_event()? {
-                return Ok(());
-            }
-        }
     }
 }
 
-struct App {
+pub struct App {
     state: State,
     connection_screen: ConnectionScreen,
-    data: Data,
 }
 
 impl App {
@@ -119,13 +114,17 @@ impl App {
         Self {
             state: State::ConnectionScreen,
             connection_screen: ConnectionScreen::new(),
-            data: Data::new(),
         }
     }
 }
 
 impl EventHandler for App {
-    fn handle_event(&mut self, event: Event) -> Result<bool> {
+    fn handle_event(
+        &mut self,
+        event: Event,
+        ctx: &Ctx,
+        tx: &UnboundedSender<AppCommand>,
+    ) -> Result<bool> {
         if let Event::Key(key_event) = event {
             if let KeyEvent {
                 code: KeyCode::Char('c'),
@@ -136,20 +135,9 @@ impl EventHandler for App {
                 return Ok(true);
             }
         }
-        match &mut self.state {
+        match self.state {
             State::ConnectionScreen => {
-                if let Event::Key(key_event) = event {
-                    if let KeyEvent {
-                        code: KeyCode::Char('c'),
-                        ..
-                    } = key_event
-                    {
-                        self.state = State::MainScreen(MainScreenTabs::Querying);
-                        return Ok(false);
-                    }
-                }
-
-                return self.connection_screen.handle_event(event);
+                return self.connection_screen.handle_event(event, ctx, tx);
             }
             State::MainScreen(_) => {}
         }
@@ -157,10 +145,10 @@ impl EventHandler for App {
     }
 }
 
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl AppWidget for App {
+    fn render(&self, area: Rect, buf: &mut Buffer, ctx: &Ctx) {
         match &self.state {
-            State::ConnectionScreen => self.connection_screen.render(area, buf),
+            State::ConnectionScreen => (&self.connection_screen).render(area, buf, ctx),
             State::MainScreen(tab) => {}
         };
     }
