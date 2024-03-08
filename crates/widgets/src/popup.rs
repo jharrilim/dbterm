@@ -1,12 +1,12 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Clear, Widget};
 
-pub(crate) struct Popup<'a> {
+pub struct Popup<'a> {
     title: &'a str,
 }
 
 impl<'a> Popup<'a> {
-    pub(crate) fn new(title: &'a str) -> Self {
+    pub fn new(title: &'a str) -> Self {
         Self { title }
     }
 
@@ -34,7 +34,10 @@ impl<'a> Widget for &Popup<'a> {
     where
         Self: Sized,
     {
-        let block = Block::default().title(self.title).borders(Borders::ALL);
+        let block = Block::default()
+            .title(self.title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().light_cyan());
         Clear.render(area, buf);
         block.render(area, buf);
     }

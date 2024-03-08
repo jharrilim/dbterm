@@ -8,7 +8,6 @@ use self::connection_list::ConnectionList;
 use crate::{
     data::{AppCommand, ConnectionInfo, Ctx},
     events::EventHandler,
-    popup::Popup,
     widget::AppWidget,
 };
 use color_eyre::eyre::Result;
@@ -17,6 +16,8 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph, Wrap},
 };
+
+use dbterm_widgets::popup::Popup;
 
 #[derive(Debug, Default, PartialEq)]
 enum State {
@@ -54,10 +55,21 @@ impl EventHandler for ConnectionScreen {
                 Event::Key(key_event) => {
                     if key_event.code == KeyCode::Char('n')
                         && self.state == State::Home
-                        && key_event.kind == KeyEventKind::Press
                     {
                         self.state = State::NewConnection;
                         self.new_connection_form = ConnectionInfoForm::new();
+                        return Ok(false);
+                    }
+                    if key_event.code == KeyCode::Char('q') {
+                        tx.send(AppCommand::Quit).ok();
+                        return Ok(true);
+                    }
+                    if key_event.code == KeyCode::Char('c') || key_event.code == KeyCode::Enter {
+                        tx.send(AppCommand::ConnectToDatabase(self.connections_list.selected())).ok();
+                        return Ok(false);
+                    }
+                    if key_event.code == KeyCode::Char('d') {
+                        tx.send(AppCommand::DeleteConnection(self.connections_list.selected())).ok();
                         return Ok(false);
                     }
                     self.connections_list.handle_event(event, ctx, tx)

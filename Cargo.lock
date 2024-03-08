@@ -629,6 +629,7 @@ dependencies = [
  "clokwerk",
  "color-eyre",
  "crossterm",
+ "dbterm-widgets",
  "dirs",
  "keyring",
  "ratatui",
@@ -638,6 +639,13 @@ dependencies = [
  "tokio",
  "tokio-macros",
  "tui-textarea",
+]
+
+[[package]]
+name = "dbterm-widgets"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
 ]
 
 [[package]]

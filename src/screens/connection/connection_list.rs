@@ -25,6 +25,10 @@ impl ConnectionList {
         Self { selected: 0 }
     }
 
+    pub fn selected(&self) -> usize {
+        self.selected
+    }
+
     // renders a block for a single connection showcasing all of its info
     pub fn render_connection_block(
         &self,
@@ -69,7 +73,7 @@ impl EventHandler for ConnectionList {
         &mut self,
         event: Event,
         ctx: &Ctx,
-        _tx: &UnboundedSender<AppCommand>,
+        tx: &UnboundedSender<AppCommand>,
     ) -> Result<bool> {
         match event {
             Event::Key(key_event) => match key_event.code {
@@ -77,15 +81,18 @@ impl EventHandler for ConnectionList {
                     if self.selected > 0 {
                         self.selected -= 1;
                     } else {
-                        self.selected = ctx.read().unwrap().connections.len() - 1;
+                        self.selected = ctx.read().unwrap().connections.len().saturating_sub(1);
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if self.selected < ctx.read().unwrap().connections.len() - 1 {
+                    if self.selected < ctx.read().unwrap().connections.len().saturating_sub(1) {
                         self.selected += 1;
                     } else {
                         self.selected = 0;
                     }
+                }
+                KeyCode::Enter => {
+                    tx.send(AppCommand::ConnectToDatabase(self.selected)).ok();
                 }
                 _ => {}
             },
@@ -104,7 +111,7 @@ impl AppWidget for ConnectionList {
         let block_area = block.inner(area);
         block.render(area, buf);
 
-        let conns = &ctx.read().unwrap().connections;
+        let conns = ctx.read().unwrap().connections();
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .flex(Flex::Start)
