@@ -54,11 +54,13 @@ impl MainScreen {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::LightMagenta));
 
-        let all_rows = headers
-            .into_iter()
-            .chain(rows.iter().map(|row| row.join("\n")))
+        let rows = rows
+            .iter()
+            .map(|row| row.join("\t"))
             .collect::<Vec<String>>();
-        let mut output = TextArea::from(all_rows);
+
+        let rows = vec![headers.join("\t")].into_iter().chain(rows).collect::<Vec<_>>();
+        let mut output = TextArea::from(rows);
         output.set_line_number_style(Style::default());
         output.set_block(body);
         self.output = output;
@@ -73,19 +75,12 @@ impl EventHandler for MainScreen {
         tx: &UnboundedSender<AppCommand>,
     ) -> Result<bool> {
 
-      // for mac
-      #[cfg(target_os = "macos")]
-      let exec_modifier = KeyModifiers::SUPER;
-      // for windows and linux
-      #[cfg(not(target_os = "macos"))]
-      let exec_modifier = KeyModifiers::CONTROL;
-
         match self.state {
             State::Query => match event {
                 Event::Key(key_event) => match key_event {
                     KeyEvent {
                         code: KeyCode::Enter,
-                        modifiers: exec_modifier,
+                        // switch to cmd/ctrl + enter after this is resolved https://github.com/crossterm-rs/crossterm/issues/515
                         ..
                     } => {
                         tx.send(AppCommand::Query(self.input.lines().join("\n")))

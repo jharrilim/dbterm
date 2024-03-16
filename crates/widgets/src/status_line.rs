@@ -5,6 +5,7 @@ pub enum Status {
     Info(String),
     Error(String),
     Success(String),
+    None,
 }
 
 #[derive(Debug)]
@@ -38,6 +39,7 @@ impl Widget for &StatusLine {
                 Status::Info(msg) => Text::raw(msg).style(Style::default().bg(bg).white()),
                 Status::Error(msg) => Text::raw(msg).style(Style::default().bg(bg).red()),
                 Status::Success(msg) => Text::raw(msg).style(Style::default().bg(bg).green()),
+                Status::None => Text::raw("").style(Style::default().bg(bg).white()),
             },
             None => Text::raw("").style(Style::default().bg(bg).white()),
         };

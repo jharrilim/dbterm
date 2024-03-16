@@ -1,9 +1,13 @@
-use std::{any::Any, sync::{Arc, RwLock}};
+use std::{
+    any::Any,
+    ops::Deref,
+    sync::{Arc, RwLock},
+};
 
 use color_eyre::eyre::Result;
 use dbterm_widgets::status_line::Status;
+use sea_orm::{ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
-use sqlx::{Column, PgPool, Row, TypeInfo};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::render::{self, RenderEvent};
@@ -58,9 +62,14 @@ impl Data {
     }
 }
 
+struct DbConnection {
+    pool: DatabaseConnection,
+    db_type: DatabaseType,
+}
+
 pub struct Store {
     data: Arc<RwLock<Data>>,
-    pool: Option<PgPool>,
+    db: Option<DbConnection>,
 }
 
 impl Default for Store {
@@ -73,7 +82,7 @@ impl Store {
     pub fn new() -> Self {
         Self {
             data: Arc::new(RwLock::new(Data::new())),
-            pool: None,
+            db: None,
         }
     }
 
@@ -126,46 +135,40 @@ impl Store {
             }
             AppCommand::ConnectToDatabase(idx) => {
                 if let Some((_, connection)) = self.data.read().unwrap().connections.get(idx) {
-                    match connection.database_type {
-                        DatabaseType::Postgres => {
-                            let pool = PgPool::connect(&connection.to_connection_string()).await?;
-                            self.pool = Some(pool);
-                            render_tx.send(RenderEvent::Connected).ok();
-                        }
-                        _ => todo!("Connect to other databases"),
-                    }
+                    let pool = Database::connect(&connection.to_connection_string()).await?;
+                    render_tx.send(RenderEvent::Connected).ok();
+                    self.db = Some(DbConnection {
+                        pool,
+                        db_type: connection.database_type,
+                    });
                 }
             }
             AppCommand::DeleteConnection(idx) => {
                 render_tx.send(RenderEvent::Draw).ok();
             }
             AppCommand::Query(query) => {
-                if let Some(pool) = &self.pool {
-                    let rows = sqlx::query(&query).fetch_all(pool).await?;
-
-                    let headers = rows
+                if let Some(db) = &self.db {
+                    let results = db
+                        .pool
+                        .query_all(Statement::from_string(db.db_type.into(), query))
+                        .await?;
+                    let headers = results
                         .first()
-                        .map(|row| row
-                            .columns()
-                            .iter()
-                            .map(|col| col.name().to_string())
-                            .collect::<Vec<String>>()
-                        )
+                        .and_then(|r| Some(r.column_names()))
                         .unwrap_or_default();
-                    let rows = rows
+
+                    let rows = results
                         .iter()
-                        .map(|row| {
-                            row.columns()
-                                .iter()
-                                .enumerate()
-                                .map(|(i, col)| {
-                                    col.type_info().name().to_string()
-                                })
-                                .collect()
-                        })
-                        .collect();
+                        .enumerate()
+                        .flat_map(|(i, r)| r.try_get_many_by_index::<Vec<sea_orm::JsonValue>>())
+                        .map(|r| r.iter().map(|i| i.to_string()).collect())
+                        .collect::<Vec<Vec<_>>>();
+
                     render_tx
-                        .send(RenderEvent::QueryResult { headers, rows })
+                        .send(RenderEvent::QueryResult {
+                            headers,
+                            rows,
+                        })
                         .ok();
                 }
             }
@@ -202,6 +205,16 @@ pub enum DatabaseType {
     Postgres,
     Mysql,
     Sqlite,
+}
+
+impl From<DatabaseType> for DatabaseBackend {
+    fn from(db_type: DatabaseType) -> Self {
+        match db_type {
+            DatabaseType::Postgres => DatabaseBackend::Postgres,
+            DatabaseType::Mysql => DatabaseBackend::MySql,
+            DatabaseType::Sqlite => DatabaseBackend::Sqlite,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
