@@ -31,6 +31,8 @@ impl MainScreen {
 
         let mut output = TextArea::default();
         output.set_line_number_style(Style::default());
+        output.set_cursor_line_style(Style::default());
+        output.set_cursor_style(Style::default());
         output.set_block(body);
 
         let footer = Block::default()
@@ -39,6 +41,7 @@ impl MainScreen {
             .border_style(Style::default().fg(Color::LightMagenta));
 
         let mut input = TextArea::default();
+        input.set_cursor_line_style(Style::default());
         input.set_block(footer);
 
         Self {
@@ -63,6 +66,8 @@ impl MainScreen {
         let mut output = TextArea::from(rows);
         output.set_line_number_style(Style::default());
         output.set_block(body);
+        output.set_cursor_line_style(Style::default());
+        output.set_cursor_style(Style::default());
         self.output = output;
     }
 }
@@ -105,7 +110,7 @@ impl AppWidget for MainScreen {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(3),
+                    // Constraint::Length(3),
                     Constraint::Min(1),
                     Constraint::Length(3),
                 ]
@@ -113,12 +118,12 @@ impl AppWidget for MainScreen {
             )
             .split(area);
 
-        let header = Block::default()
-            .title("Header")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::LightMagenta));
-        header.render(layout[0], buf);
-        self.output.widget().render(layout[1], buf);
-        self.input.widget().render(layout[2], buf);
+        // let header = Block::default()
+        //     .title("Header")
+        //     .borders(Borders::ALL)
+        //     .border_style(Style::default().fg(Color::LightMagenta));
+        // header.render(layout[0], buf);
+        self.output.widget().render(layout[0], buf);
+        self.input.widget().render(layout[1], buf);
     }
 }

@@ -6,7 +6,7 @@ use std::{
 
 use color_eyre::eyre::Result;
 use dbterm_widgets::status_line::Status;
-use sea_orm::{ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, Statement};
+use sea_orm::{ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, FromQueryResult, QueryResult, Statement, TryGetableFromJson};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -160,8 +160,8 @@ impl Store {
                     let rows = results
                         .iter()
                         .enumerate()
-                        .flat_map(|(i, r)| r.try_get_many_by_index::<Vec<sea_orm::JsonValue>>())
-                        .map(|r| r.iter().map(|i| i.to_string()).collect())
+                        .flat_map(|(i, r)| serde_json::Value::from_query_result(r, "").ok())
+                        .map(|r| r.as_object().unwrap().values().map(|v| v.to_string()).collect())
                         .collect::<Vec<Vec<_>>>();
 
                     render_tx

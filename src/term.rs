@@ -5,7 +5,7 @@ use std::{
 
 use color_eyre::{eyre::WrapErr, Result};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    event::{self, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -14,7 +14,7 @@ use ratatui::prelude::*;
 pub fn init() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     enable_raw_mode().context("enable raw mode")?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
+    execute!(stdout, EnterAlternateScreen)
         .wrap_err("enter alternate screen")?;
     let backend = CrosstermBackend::new(stdout);
     let terminal = Terminal::new(backend)?;
@@ -23,7 +23,7 @@ pub fn init() -> Result<Terminal<CrosstermBackend<Stdout>>> {
 
 pub fn restore<W: Write>(writer: &mut W) -> Result<()> {
     disable_raw_mode().context("disable raw mode")?;
-    execute!(writer, LeaveAlternateScreen, DisableMouseCapture)
+    execute!(writer, LeaveAlternateScreen)
         .wrap_err("leave alternate screen")?;
     Ok(())
 }

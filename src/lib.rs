@@ -2,7 +2,6 @@ pub mod app;
 pub mod data;
 pub mod errors;
 pub mod events;
-pub mod query;
 pub mod render;
 pub mod screens;
 pub mod term;
